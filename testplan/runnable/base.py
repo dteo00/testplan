@@ -319,6 +319,7 @@ class TestRunnerConfig(RunnableConfig):
                 "otel_traces", default=defaults.TRACE_LEVEL
             ): TraceLevel,
             ConfigOption("otel_traceparent", default=None): Or(str, None),
+            ConfigOption("otel_logs", default=None): bool,
         }
 
 
