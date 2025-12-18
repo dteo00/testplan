@@ -118,6 +118,8 @@ class RemoteWorker(ProcessWorker, RemoteResource):
         ]
         if self.otel_traces and tracing._get_traceparent():
             cmd.extend(["--otel-traceparent", tracing._get_traceparent()])
+        if self.otel_logs:
+            cmd.append("--otel-logs")
         if self.parent.resource_monitor_address:
             cmd.extend(
                 [

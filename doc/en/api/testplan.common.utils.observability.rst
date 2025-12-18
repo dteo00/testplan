@@ -11,3 +11,8 @@ testplan.common.utils.observability.tracing module
     :members:
     :undoc-members:
     :show-inheritance:
+
+.. automodule:: testplan.common.utils.observability.logging
+    :members:
+    :undoc-members:
+    :show-inheritance:
