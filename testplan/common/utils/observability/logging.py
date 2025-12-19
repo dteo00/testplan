@@ -104,10 +104,6 @@ class OTEL_Logging(Loggable):
         logging_handler.setLevel(logging.DEBUG)
         TESTPLAN_LOGGER.addHandler(logging_handler)
 
-    def log(self, message: str, level: int = logging.INFO, **kwargs):
-        if self._logging_enabled:
-            self.logger.log(level, message, extra=kwargs)
-
     def force_flush(self):
         """
         Force the current log processor to export all recorded logs.

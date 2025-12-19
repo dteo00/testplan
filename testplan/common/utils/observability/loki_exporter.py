@@ -72,8 +72,8 @@ class LokiExporter(LogExporter):
                         ),
                         "trace_id": self._to_hex(record.trace_id, 32),
                         "span_id": self._to_hex(record.span_id, 16),
+                        "detected_level": record.severity_text,
                     },
-                    "detected_level": record.severity_text,
                     "values": [[str(record.timestamp), record.body]],
                 }
             )
