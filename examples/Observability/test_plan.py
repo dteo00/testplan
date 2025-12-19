@@ -146,7 +146,9 @@ class MultiTestCaseSpan:
         tracing.end_span(self.span)
 
 
-@test_plan(name="ObservabilityExample", otel_traces=TraceLevel.TEST, otel_logs=True)
+@test_plan(
+    name="ObservabilityExample", otel_traces=TraceLevel.TEST, otel_logs=True
+)
 def main(plan):
     """
     Testplan demonstrating observability features.
