@@ -62,6 +62,11 @@ class LokiExporter(LogExporter):
         formatted_logs = []
         for log_data in batch:
             record = log_data.log_record
+            trace_id = self._to_hex(record.trace_id, 32)
+            if trace_id == "00000000000000000000000000000000":
+                # some of the logs have no trace/span id associated, since they run in a separate thread where tracing is not setup
+                # skip them
+                continue
             formatted_logs.append(
                 {
                     "stream": {
@@ -70,13 +75,17 @@ class LokiExporter(LogExporter):
                         "service_name": record.resource.attributes.get(
                             "service.name"
                         ),
-                        "trace_id": self._to_hex(record.trace_id, 32),
+                        "trace_id": trace_id,
                         "span_id": self._to_hex(record.span_id, 16),
                         "detected_level": record.severity_text,
                     },
                     "values": [[str(record.timestamp), record.body]],
                 }
             )
+
+        if not formatted_logs:
+            return LogExportResult.SUCCESS
+
         for attempt in range(2):
             try:
                 self._send_payload(formatted_logs)
@@ -91,6 +100,7 @@ class LokiExporter(LogExporter):
                     self.logger.error(
                         f"Failed to send logs to Loki after 2 attempts: {e}"
                     )
+
         return LogExportResult.FAILURE
 
     def _to_hex(self, value: int, width: int = 16) -> str:
