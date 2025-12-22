@@ -108,8 +108,12 @@ class OTEL_Logging(Loggable):
         """
         Force the current log processor to export all recorded logs.
         """
+        import traceback
+        self.logger.error("Call stack:\n" + "".join(traceback.format_stack()))
+        self.logger.error("Flushing OTEL logs...")
         if self._logger_provider:
             self._logger_provider.force_flush()
+            self.logger.error("FLUSHED...")
 
 
 otel_logging = OTEL_Logging()
