@@ -1,3 +1,4 @@
+import re
 from typing import List, Optional, Dict
 
 from opentelemetry.sdk._logs import LogData
@@ -11,6 +12,15 @@ from testplan.report.testing.styles import Style, StyleEnum
 
 # Set outputstyle so the result.log/equal get logged out
 OUTPUT_STYLE = Style(StyleEnum.ASSERTION, StyleEnum.ASSERTION)
+
+
+# ANSI escape code pattern for stripping color codes
+ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    return ANSI_ESCAPE_PATTERN.sub("", text)
 
 
 def find_log(logs: List[LogData], message_substring: str) -> Optional[LogData]:
@@ -62,7 +72,7 @@ def assert_logs_have_span_id(logs: List[LogData], span: Span):
 
 
 def assert_messages_in_logs(logs: List[LogData], expected_messages: List[str]):
-    messages = [log.log_record.body for log in logs]
+    messages = [strip_ansi_codes(log.log_record.body) for log in logs]
     for expected_msg in expected_messages:
         assert any(expected_msg in msg for msg in messages)
 
@@ -70,7 +80,7 @@ def assert_messages_in_logs(logs: List[LogData], expected_messages: List[str]):
 def assert_messages_not_in_logs(
     logs: List[LogData], unexpected_messages: List[str]
 ):
-    messages = [log.log_record.body for log in logs]
+    messages = [strip_ansi_codes(log.log_record.body) for log in logs]
     for unexpected_msg in unexpected_messages:
         assert not any(unexpected_msg in msg for msg in messages)
 
@@ -478,7 +488,8 @@ def test_logs_with_multiple_multitests(test_log_exporter, test_exporter):
 
     # AnotherSuite has test_two and test_three
     anothersuite_messages = [
-        log.log_record.body for log in logs_by_span["AnotherSuite"]
+        strip_ansi_codes(log.log_record.body)
+        for log in logs_by_span["AnotherSuite"]
     ]
     assert any(
         "[test_two]" in msg or "[test_three]" in msg
@@ -520,7 +531,8 @@ def test_logs_with_failing_tests(test_log_exporter, test_exporter):
     )
 
     failing_messages = [
-        log.log_record.body for log in logs_by_span["failing_case"]
+        strip_ansi_codes(log.log_record.body)
+        for log in logs_by_span["failing_case"]
     ]
     assert any("1 == 2" in msg and "Fail" in msg for msg in failing_messages)
 

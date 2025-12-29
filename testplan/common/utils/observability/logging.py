@@ -8,20 +8,6 @@ from testplan.common.utils.logger import Loggable, TESTPLAN_LOGGER
 from testplan.common.utils.observability.loki_exporter import LokiExporter
 
 
-class NoColorFormatter(logging.Formatter):
-    ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-
-    def format(self, record):
-        original = super().format(record)
-        no_ansi = self.ANSI_ESCAPE.sub("", original)
-        normalized = (
-            unicodedata.normalize("NFKD", no_ansi)
-            .encode("ascii", errors="ignore")
-            .decode()
-        )
-        return normalized
-
-
 class OTEL_Logging(Loggable):
     """
     Global logging object to handle OpenTelemetry logging integration.
@@ -100,7 +86,6 @@ class OTEL_Logging(Loggable):
         )
 
         logging_handler = LoggingHandler(logger_provider=self._logger_provider)
-        logging_handler.setFormatter(NoColorFormatter("%(message)s"))
         logging_handler.setLevel(logging.DEBUG)
         TESTPLAN_LOGGER.addHandler(logging_handler)
 

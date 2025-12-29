@@ -19,7 +19,6 @@ from testplan.common.utils.path import VAR_TMP
 from testplan.common.utils import observability
 from testplan.common.utils.logger import TESTPLAN_LOGGER
 from testplan.common.utils.observability import (
-    NoColorFormatter,
     OTEL_Logging,
     RootTraceIdGenerator,
     Tracing,
@@ -309,7 +308,6 @@ def test_log_exporter(session_provider_log_exporter, monkeypatch):
         otel_handler = LoggingHandler(
             level=logging.DEBUG, logger_provider=provider
         )
-        otel_handler.setFormatter(NoColorFormatter("%(message)s"))
         otel_handler.setLevel(logging.DEBUG)
         TESTPLAN_LOGGER.addHandler(otel_handler)
 

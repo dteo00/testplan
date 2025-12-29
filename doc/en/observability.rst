@@ -5,7 +5,7 @@ Observability
 
 Testplan provides built-in observability through OpenTelemetry tracing and logging, allowing you to monitor
 and analyze test execution. This feature enables you to monitor test execution flow, timing, performance bottlenecks,
-and detailed log output correlated with your traces.
+and export log output correlated with your traces to Loki.
 
 Overview
 ========
