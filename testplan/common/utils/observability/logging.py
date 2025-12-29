@@ -49,7 +49,7 @@ class OTEL_Logging(Loggable):
             )
         except ImportError as e:
             raise RuntimeError(
-                "Certain packages failed to import, please consider install Testplan"
+                "Certain packages failed to import, please consider install Testplan "
                 "package with `observability` extra to enable logging."
             ) from e
 
