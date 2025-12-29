@@ -1,11 +1,7 @@
 import logging
-import re
-import unicodedata
-import logging
 import os
 
 from testplan.common.utils.logger import Loggable, TESTPLAN_LOGGER
-from testplan.common.utils.observability.loki_exporter import LokiExporter
 
 
 class OTEL_Logging(Loggable):
@@ -48,6 +44,9 @@ class OTEL_Logging(Loggable):
             from opentelemetry import _logs
             from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
             from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+            from testplan.common.utils.observability.loki_exporter import (
+                LokiExporter,
+            )
         except ImportError as e:
             raise RuntimeError(
                 "Certain packages failed to import, please consider install Testplan"

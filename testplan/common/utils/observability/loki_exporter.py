@@ -1,8 +1,8 @@
-import sys
-from typing import Sequence
-import requests
 import logging
+import requests
+import sys
 import time
+from typing import Sequence
 
 from opentelemetry.sdk._logs import LogData
 from opentelemetry.sdk._logs.export import LogExporter, LogExportResult
