@@ -109,6 +109,13 @@ class WorkerBase(entity.Resource):
         self.assigned: Set[str] = set()
         self.requesting: int = 0
         self.restart_count: int = self.cfg.restart_count
+        # Serializes worker.assigned mutations between the pool's request
+        # handler and the monitor's _decommission_worker.
+        self._state_lock = threading.Lock()
+        # Set by _decommission_worker (under _state_lock) and cleared by
+        # _clear_decommissioning after restart/recover/abort. Tells the
+        # taskpull handler not to assign new work to this worker.
+        self._decommissioning: bool = False
 
     @property
     def host(self) -> str:
@@ -574,7 +581,8 @@ class Pool(Executor):
         self, worker: Worker, request: Message, response: Message
     ) -> None:
         """Handle a TaskPullRequest from a worker."""
-        tasks = []
+        tasks: List[Task] = []
+        unassigned_empty = False
 
         if self.status == self.status.STARTED:  # type: ignore[attr-defined]
             with self._discard_pending_lock:
@@ -582,63 +590,73 @@ class Pool(Executor):
                     # in case of long heartbeat interval
                     worker.respond(response.make(Message.DiscardPending))
                     return
+            with worker._state_lock:
+                if worker._decommissioning or not worker.active:
+                    # Worker is mid-decommission or aborted; do not assign.
+                    worker.requesting = request.data
+                    worker.respond(response.make(Message.Ack))
+                    return
 
-            for _ in range(request.data):
-                try:
-                    priority, uid = self.unassigned.get()
-                except queue.Empty:
-                    self.logger.debug("No tasks to assign to %s", worker)
-                    if self._early_stop_worker(worker):
-                        worker.respond(response.make(Message.Stop))
-                        return
-                    break
+                for _ in range(request.data):
+                    try:
+                        priority, uid = self.unassigned.get()
+                    except queue.Empty:
+                        self.logger.debug("No tasks to assign to %s", worker)
+                        unassigned_empty = True
+                        break
 
-                task = self._input[uid]
-                worker.rebase_task_path(task)
+                    task = self._input[uid]
+                    worker.rebase_task_path(task)
 
-                if self._can_assign_task(task):
-                    if (
-                        self._task_reassign_cnt[uid]
-                        > self._task_reassign_limit
-                    ):
+                    if self._can_assign_task(task):
+                        if (
+                            self._task_reassign_cnt[uid]
+                            > self._task_reassign_limit
+                        ):
+                            self._discard_task(
+                                uid,
+                                f"{self._input[uid]} already reached pool reassign limit:"
+                                f" {self._task_reassign_limit}",
+                            )
+                            continue
+                        else:
+                            if self._can_assign_task_to_worker(task, worker):
+                                self.logger.user_info(
+                                    "Scheduling %s to %s %s",
+                                    task,
+                                    worker,
+                                    "(rerun {})".format(task.rerun_cnt)
+                                    if task.rerun_cnt > 0
+                                    else "",
+                                )
+                                worker.assigned.add(uid)
+                                tasks.append(task)
+                                task.executors.setdefault(self.cfg.name, set())
+                                task.executors[self.cfg.name].add(worker.uid())
+                                self.record_execution(uid)
+                            else:
+                                self.logger.user_info(
+                                    "Cannot schedule %s to %s", task, worker
+                                )
+                                self.unassigned.put(task.priority, uid)
+                                self._task_reassign_cnt[uid] += 1
+                    else:
+                        # Later may create a default local pool as failover option
                         self._discard_task(
                             uid,
-                            f"{self._input[uid]} already reached pool reassign limit:"
-                            f" {self._task_reassign_limit}",
+                            f"{self._input[uid]} cannot be executed in {self}",
                         )
-                        continue
-                    else:
-                        if self._can_assign_task_to_worker(task, worker):
-                            self.logger.user_info(
-                                "Scheduling %s to %s %s",
-                                task,
-                                worker,
-                                "(rerun {})".format(task.rerun_cnt)
-                                if task.rerun_cnt > 0
-                                else "",
-                            )
-                            worker.assigned.add(uid)
-                            tasks.append(task)
-                            task.executors.setdefault(self.cfg.name, set())
-                            task.executors[self.cfg.name].add(worker.uid())
-                            self.record_execution(uid)
-                        else:
-                            self.logger.user_info(
-                                "Cannot schedule %s to %s", task, worker
-                            )
-                            self.unassigned.put(task.priority, uid)
-                            self._task_reassign_cnt[uid] += 1
-                else:
-                    # Later may create a default local pool as failover option
-                    self._discard_task(
-                        uid,
-                        f"{self._input[uid]} cannot be executed in {self}",
-                    )
 
-            if tasks:
-                worker.respond(response.make(Message.TaskSending, data=tasks))
-                worker.requesting = request.data - len(tasks)
-                return
+                if tasks:
+                    worker.respond(
+                        response.make(Message.TaskSending, data=tasks)
+                    )
+                    worker.requesting = request.data - len(tasks)
+                    return
+
+        if unassigned_empty and self._early_stop_worker(worker):
+            worker.respond(response.make(Message.Stop))
+            return
 
         worker.requesting = request.data
         worker.respond(response.make(Message.Ack))
@@ -770,14 +788,24 @@ class Pool(Executor):
         self.logger.warning(message.format(worker))
         if os.path.exists(worker.outfile):
             self.logger.user_info("\tlogfile: %s", worker.outfile)
-        while worker.assigned:
-            uid = worker.assigned.pop()
-            task = self._input[uid]
-            self.logger.user_info(
-                "Re-collect %s from %s to %s.", task, worker, self
-            )
-            self.unassigned.put(task.priority, uid)
-            self._task_reassign_cnt[uid] += 1
+        with worker._state_lock:
+            worker._decommissioning = True
+            while worker.assigned:
+                uid = worker.assigned.pop()
+                task = self._input[uid]
+                self.logger.user_info(
+                    "Re-collect %s from %s to %s.", task, worker, self
+                )
+                self.unassigned.put(task.priority, uid)
+                self._task_reassign_cnt[uid] += 1
+
+    def _clear_decommissioning(self, worker: Worker) -> None:
+        """
+        Release the decommissioning gate so that subsequent taskpull
+        requests are allowed to assign work to this worker again.
+        """
+        with worker._state_lock:
+            worker._decommissioning = False
 
     def _workers_monitoring(self) -> None:
         """
@@ -917,21 +945,24 @@ class Pool(Executor):
 
         self._decommission_worker(worker, reason)
 
-        if worker.restart_count:
-            worker.restart_count -= 1
-            try:
-                worker.restart()
-                self.logger.info("Worker %s has restarted", worker)
-                return True
+        try:
+            if worker.restart_count:
+                worker.restart_count -= 1
+                try:
+                    worker.restart()
+                    self.logger.info("Worker %s has restarted", worker)
+                    return True
 
-            except Exception as exc:
-                self.logger.critical(
-                    "Worker %s failed to restart: %s", worker, exc
-                )
-        self.logger.warning("Worker %s is inactive and will abort", worker)
-        worker.abort()
+                except Exception as exc:
+                    self.logger.critical(
+                        "Worker %s failed to restart: %s", worker, exc
+                    )
+            self.logger.warning("Worker %s is inactive and will abort", worker)
+            worker.abort()
 
-        return False
+            return False
+        finally:
+            self._clear_decommissioning(worker)
 
     def _discard_task(self, uid: str, reason: str) -> None:
         self.logger.critical(

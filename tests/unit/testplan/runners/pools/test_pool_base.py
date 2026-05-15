@@ -285,6 +285,87 @@ class TestPoolIsolated:
 
             assert pool.unassigned.size() == unassigned_before
 
+    def test_decommission_sets_drains_and_clears(self):
+        """
+        ``_decommission_worker`` sets ``_decommissioning`` and drains
+        ``worker.assigned`` back onto ``unassigned``;
+        ``_clear_decommissioning`` flips the flag back.
+        """
+        pool = pools_base.Pool(
+            name="MyPool", size=1, worker_type=ControllableWorker
+        )
+        pool.cfg.set_local("skip_strategy", SkipStrategy.noop())
+        pool._start_monitor_thread = False
+
+        with pool:
+            worker = pool._workers["0"]
+            task = Task(target=Runnable(5))
+            pool.add(task, uid=task.uid())
+            _, uid = pool.unassigned.get()
+            worker.assigned.add(uid)
+
+            pool._decommission_worker(worker, "test decommission")
+            assert worker._decommissioning is True
+            assert worker.assigned == set()
+            assert pool.unassigned.size() == 1
+
+            pool._clear_decommissioning(worker)
+            assert worker._decommissioning is False
+
+    def test_taskpull_acks_when_decommissioning(self):
+        """
+        A ``TaskPullRequest`` from a worker whose ``_decommissioning``
+        flag is set replies ``Ack`` and leaves the task in
+        ``unassigned``.
+        """
+        pool = pools_base.Pool(
+            name="MyPool", size=1, worker_type=ControllableWorker
+        )
+        pool.cfg.set_local("skip_strategy", SkipStrategy.noop())
+        pool._start_monitor_thread = False
+
+        with pool:
+            worker = pool._workers["0"]
+            task = Task(target=Runnable(5))
+            pool.add(task, uid=task.uid())
+            worker._decommissioning = True
+
+            msg_factory = communication.Message(**worker.metadata)
+            received = worker.transport.send_and_receive(
+                msg_factory.make(msg_factory.TaskPullRequest, data=1)
+            )
+
+            assert received.cmd == communication.Message.Ack
+            assert pool.unassigned.size() == 1
+            assert task.uid() not in worker.assigned
+
+    def test_handle_inactive_clears_flag_on_restart(self):
+        """``_handle_inactive`` clears the flag after restart."""
+        pool = pools_base.Pool(
+            name="MyPool", size=1, worker_type=ControllableWorker
+        )
+        pool._start_monitor_thread = False
+
+        with pool:
+            worker = pool._workers["0"]
+            worker._is_alive = False
+            assert pool._handle_inactive(worker, "test") is True
+            assert worker._decommissioning is False
+
+    def test_handle_inactive_clears_flag_on_abort(self):
+        """``_handle_inactive`` clears the flag on the abort path too."""
+        pool = pools_base.Pool(
+            name="MyPool", size=1, worker_type=ControllableWorker
+        )
+        pool._start_monitor_thread = False
+
+        with pool:
+            worker = pool._workers["0"]
+            worker.restart_count = 0
+            worker._is_alive = False
+            assert pool._handle_inactive(worker, "test") is False
+            assert worker._decommissioning is False
+
     def test_handle_request_handler_raises_with_disconnected_transport(self):
         """
         Handler raises and disconnects mid-flight; handle_request must
