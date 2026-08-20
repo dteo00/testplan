@@ -1,0 +1,1 @@
+``result.graph()`` now renders via ``chart.js`` instead of ``react-vis``, which has been removed as a dependency; the ``Whisker``, ``Contour`` and ``Hexbin`` types are no longer supported, use ``result.plotly()`` instead.

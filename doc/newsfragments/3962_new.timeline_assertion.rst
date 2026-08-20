@@ -1,0 +1,1 @@
+Add ``result.timeline()`` to display a Gantt-style timeline chart via ``chart.js``; ``driver_info`` now uses it instead of a plotly figure. See :ref:`here <timeline_visualisation>` for more details.
