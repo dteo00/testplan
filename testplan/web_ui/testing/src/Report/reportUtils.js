@@ -540,8 +540,12 @@ const CenterPane = ({
             .get(fetchUrl, axiosConfig)
             .then(async (response) => {
               let assertions;
-              if (reportVersion >= 4) {
+              if (reportVersion === 4) {
                 const text = await decompressGzipToText(response.data);
+                assertions = parseToJson(text);
+              } else if (reportVersion >= 5) {
+                // `Content-Encoding: gzip`
+                const text = new TextDecoder("utf-8").decode(response.data);
                 assertions = parseToJson(text);
               } else {
                 assertions = parseToJson(response.data);
