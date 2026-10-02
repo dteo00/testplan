@@ -13,7 +13,6 @@ import {
   formatMilliseconds,
   getAttachmentUrl,
   parseToJson,
-  decompressGzipToText,
 } from "./../Common/utils";
 import { VIEW_TYPE } from "../Common/defaults";
 import { filterEntries } from "./reportFilter";
@@ -528,10 +527,10 @@ const CenterPane = ({
               : { transformResponse: (d) => d };
           axios
             .get(fetchUrl, axiosConfig)
-            .then(async (response) => {
+            .then((response) => {
               let assertions;
               if (reportVersion >= 4) {
-                const text = await decompressGzipToText(response.data);
+                const text = new TextDecoder().decode(response.data);
                 assertions = parseToJson(text);
               } else {
                 assertions = parseToJson(response.data);

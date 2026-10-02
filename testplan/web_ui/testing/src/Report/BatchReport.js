@@ -5,7 +5,11 @@ import axios from "axios";
 import PropTypes from "prop-types";
 import _ from "lodash";
 
-import { parseToJson, globalViewPanel, generateURLWithParameters } from "../Common/utils";
+import {
+  parseToJson,
+  globalViewPanel,
+  generateURLWithParameters,
+} from "../Common/utils";
 import BaseReport from "./BaseReport";
 import Toolbar from "../Toolbar/Toolbar";
 import NavBreadcrumbs from "../Nav/NavBreadcrumbs";
@@ -179,11 +183,23 @@ class BatchReportComponent extends BaseReport {
                 )
                 .catch(this.setError);
             } else if (rawReport.version >= 3) {
-                axios.get(
-                  `/api/v1/reports/${uid}/attachments/${rawReport.structure_file}`,
-                  { transformResponse: parseToJson }
-                ).then(structureRes => {
-                  if (!structureRes.data) {
+              const structureUrl =
+                `/api/v1/reports/${uid}/attachments/` +
+                `${rawReport.structure_file}`;
+              const axiosConfig =
+                rawReport.version >= 5
+                  ? { responseType: "arraybuffer" }
+                  : { transformResponse: parseToJson };
+              axios
+                .get(structureUrl, axiosConfig)
+                .then((structureRes) => {
+                  const structureData =
+                    rawReport.version >= 5
+                      ? parseToJson(
+                          new TextDecoder().decode(structureRes.data)
+                        )
+                      : structureRes.data;
+                  if (!structureData) {
                     console.error(structureRes);
                     alert(
                       "Failed to parse report structure!\n" +
@@ -193,7 +209,7 @@ class BatchReportComponent extends BaseReport {
                   const mergedReport = MergeSplittedReport(
                       rawReport,
                       null,
-                      structureRes.data,
+                      structureData,
                     );
                   this.setReport(this.updateReportUID(mergedReport, uid));
                 });
@@ -297,16 +313,18 @@ class BatchReportComponent extends BaseReport {
                                  .join(" > ")}`;
     }
 
-    const centerPane = <CenterPane
-      key={`center-pane-${this.props.match.params.selection}`}
-      reportState={this.state}
-      reportFetchMessage={reportFetchMessage}
-      reportUid={this.props.match.params.uid}
-      selectedEntries={selectedEntries}
-      displayTime={this.props.displayTime}
-      UTCTime={this.props.UTCTime}
-      reportVersion={this.state.report?.version || 0}
-    />;
+    const centerPane = (
+      <CenterPane
+        key={`center-pane-${this.props.match.params.selection}`}
+        reportState={this.state}
+        reportFetchMessage={reportFetchMessage}
+        reportUid={this.props.match.params.uid}
+        selectedEntries={selectedEntries}
+        displayTime={this.props.displayTime}
+        UTCTime={this.props.UTCTime}
+        reportVersion={this.state.report?.version || 0}
+      />
+    );
 
     return (
       <div className={css(styles.batchReport)}>
