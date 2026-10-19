@@ -56,7 +56,7 @@ class HTTPExporter(Exporter):
         super(HTTPExporter, self).__init__(name=name, **options)
 
     def _upload_report(
-        self, url: str, data: Any
+        self, url: str, data: Any, timeout: Optional[float] = None
     ) -> Tuple[Optional[requests.Response], str]:
         """
         Upload Json data, then return the response from server with an
@@ -64,6 +64,7 @@ class HTTPExporter(Exporter):
 
         :param url:
         :param data:
+        :param timeout: seconds, defaults to the ``timeout`` option
         :return: response, even if None, and error message pair
         :raises HTTPError: thrown if response results in HTTP error
         """
@@ -77,7 +78,7 @@ class HTTPExporter(Exporter):
                     url=url,
                     headers=headers,
                     data=json_dumps(data, default=str),
-                    timeout=self.cfg.timeout,
+                    timeout=self.cfg.timeout if timeout is None else timeout,
                 )
                 response.raise_for_status()
             except requests.exceptions.RequestException as exp:

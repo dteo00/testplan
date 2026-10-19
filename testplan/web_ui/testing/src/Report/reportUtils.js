@@ -532,7 +532,10 @@ const CenterPane = ({
               let assertions;
               if (reportVersion >= 4) {
                 // Gzip bytes if the server did not set Content-Encoding
-                const text = await decompressGzipToText(response.data);
+                const text = await decompressGzipToText(
+                  response.data,
+                  response.headers?.["content-encoding"]
+                );
                 assertions = parseToJson(text);
               } else {
                 assertions = parseToJson(response.data);

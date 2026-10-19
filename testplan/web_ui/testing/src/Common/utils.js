@@ -323,14 +323,20 @@ export const parseToJson = (data) => {
 
 
 /**
- * Decompress gzip-compressed bytes to text. If the bytes are not gzip,
- * the server sent `Content-Encoding: gzip` and the browser has already
- * decompressed them, so decode them as text.
+ * Decompress gzip-compressed bytes to text. If the server sent
+ * `Content-Encoding: gzip`, the browser has already decompressed them,
+ * so decode them as text. If a proxy removed that header, check the
+ * gzip magic bytes.
  * @param {ArrayBuffer|Uint8Array|Blob} data - gzip-compressed bytes
+ * @param {string} [encoding] - the `Content-Encoding` response header
  * @returns {Promise<string>}
  */
-export const decompressGzipToText = async (data) => {
+export const decompressGzipToText = async (data, encoding) => {
   const blob = data instanceof Blob ? data : new Blob([data]);
+  // Browser already unzipped it
+  if ((encoding || "").toLowerCase().includes("gzip")) {
+    return blob.text();
+  }
   const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
   if (head[0] !== 0x1f || head[1] !== 0x8b) {
     return blob.text();

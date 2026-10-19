@@ -198,7 +198,10 @@ class BatchReportComponent extends BaseReport {
                   const structureData =
                     rawReport.version >= 5
                       ? parseToJson(
-                          await decompressGzipToText(structureRes.data)
+                          await decompressGzipToText(
+                            structureRes.data,
+                            structureRes.headers?.["content-encoding"]
+                          )
                         )
                       : structureRes.data;
                   if (!structureData) {
